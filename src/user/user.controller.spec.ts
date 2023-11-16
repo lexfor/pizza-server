@@ -129,14 +129,14 @@ describe('UserController', () => {
       expect(await userController.findAll()).toStrictEqual([user]);
       expect(spy).toHaveBeenCalled();
     });
-    it('should throw Not Found exception because there are no users', async () => {
+    it('should throw Not Found exception because none users founded', async () => {
       const spy = jest
         .spyOn(userService, 'findAll')
         .mockImplementation(async () => {
           return [];
         });
       await expect(userController.findAll()).rejects.toThrow(
-        new HttpException('There are no users', HttpStatus.NOT_FOUND),
+        new HttpException('None users founded', HttpStatus.NOT_FOUND),
       );
       expect(spy).toHaveBeenCalled();
     });

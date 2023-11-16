@@ -11,11 +11,25 @@ import { UpdateUserDto } from '../src/user/dto/update-user.dto';
 describe('UserController (e2e)', () => {
   let app: INestApplication;
   let userRepository: Repository<User>;
+  const createUserDto: CreateUserDto = {
+    firstName: 'Alice',
+    lastName: 'Smith',
+    phoneNumber: '+375295551234',
+    login: 'AliceSmith',
+    password: 'Password123!',
+  };
 
   function deleteUsersByID(userIDs: string[]) {
     userIDs.map(async () => {
       await userRepository.delete(userIDs);
     });
+  }
+
+  async function deleteUserIfExist(login: string) {
+    const users = await userRepository.find({ where: { login } });
+    if (users.length === 0) {
+      await userRepository.delete({ login });
+    }
   }
 
   beforeAll(async () => {
@@ -26,85 +40,84 @@ describe('UserController (e2e)', () => {
     app = moduleFixture.createNestApplication();
     userRepository = moduleFixture.get<Repository<User>>('USER_REPOSITORY');
     await app.init();
+
+    await deleteUserIfExist(createUserDto.login);
   });
 
   describe('POST /user (create new user)', () => {
-    let newUserDto: CreateUserDto;
-    beforeEach(async () => {
-      newUserDto = {
-        firstName: 'Alice',
-        lastName: 'Smith',
-        phoneNumber: '+375295551234',
-        login: 'AliceSmith',
-        password: 'Password123!',
-      };
-    });
     it('successfully create new user', async () => {
       const response = await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto)
+        .send(createUserDto)
         .expect(HttpStatus.CREATED);
-      expect(response.body).toMatchObject(newUserDto);
+      expect(response.body).toMatchObject(createUserDto);
       deleteUsersByID([response.body.id]);
     });
     it('successfully create new user with phone number without country code', async () => {
-      newUserDto.phoneNumber = '295551234';
+      const wrongCreateUserDto: CreateUserDto = { ...createUserDto };
+      wrongCreateUserDto.phoneNumber = '295551234';
       const response = await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto)
+        .send(wrongCreateUserDto)
         .expect(HttpStatus.CREATED);
-      expect(response.body).toMatchObject(newUserDto);
+      expect(response.body).toMatchObject(wrongCreateUserDto);
       deleteUsersByID([response.body.id]);
     });
     it('failed create new user with too small phone number', async () => {
-      newUserDto.phoneNumber = '+375441';
+      const wrongCreateUserDto: CreateUserDto = { ...createUserDto };
+      wrongCreateUserDto.phoneNumber = '+375441';
       await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto)
+        .send(wrongCreateUserDto)
         .expect(HttpStatus.BAD_REQUEST);
     });
     it('failed create new user with too long phone number', async () => {
-      newUserDto.phoneNumber = '+3754411111111';
+      const wrongCreateUserDto: CreateUserDto = { ...createUserDto };
+      wrongCreateUserDto.phoneNumber = '+3754411111111';
       await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto)
+        .send(wrongCreateUserDto)
         .expect(HttpStatus.BAD_REQUEST);
     });
     it('failed create new user with wrong type phone number', async () => {
-      newUserDto.phoneNumber = 'phone';
+      const wrongCreateUserDto: CreateUserDto = { ...createUserDto };
+      wrongCreateUserDto.phoneNumber = 'phone';
       await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto)
+        .send(wrongCreateUserDto)
         .expect(HttpStatus.BAD_REQUEST);
     });
     it('failed create new user with password without symbol', async () => {
-      newUserDto.password = 'weakPassword123';
+      const wrongCreateUserDto: CreateUserDto = { ...createUserDto };
+      wrongCreateUserDto.password = 'weakPassword123';
       await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto)
+        .send(wrongCreateUserDto)
         .expect(HttpStatus.BAD_REQUEST);
     });
     it('failed create new user with password without numbers', async () => {
-      newUserDto.password = 'weakPassword!';
+      const wrongCreateUserDto: CreateUserDto = { ...createUserDto };
+      wrongCreateUserDto.password = 'weakPassword!';
       await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto)
+        .send(wrongCreateUserDto)
         .expect(HttpStatus.BAD_REQUEST);
     });
     it('failed create new user with password without capital letter', async () => {
-      newUserDto.password = 'weakpassword123!';
+      const wrongCreateUserDto: CreateUserDto = { ...createUserDto };
+      wrongCreateUserDto.password = 'weakpassword123!';
       await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto)
+        .send(wrongCreateUserDto)
         .expect(HttpStatus.BAD_REQUEST);
     });
     it('failed create new user with same login', async () => {
       const response = await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto);
+        .send(createUserDto);
       await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto)
+        .send(createUserDto)
         .expect(HttpStatus.BAD_REQUEST);
       deleteUsersByID([response.body.id]);
     });
@@ -113,16 +126,9 @@ describe('UserController (e2e)', () => {
   describe('GET /user/:id (get user by ID)', () => {
     let createdUser: User;
     beforeAll(async () => {
-      const newUser: CreateUserDto = {
-        firstName: 'Alice',
-        lastName: 'Smith',
-        phoneNumber: '+375295551234',
-        login: 'AliceSmith',
-        password: 'Password123!',
-      };
       const response = await request(app.getHttpServer())
         .post('/user')
-        .send(newUser);
+        .send(createUserDto);
       createdUser = response.body;
     });
     it('successfully get new user', async () => {
@@ -149,13 +155,6 @@ describe('UserController (e2e)', () => {
   describe('GET /user (get all users)', () => {
     const createdUsers: User[] = [];
     beforeAll(async () => {
-      const firstNewUserDto: CreateUserDto = {
-        firstName: 'Alice',
-        lastName: 'Smith',
-        phoneNumber: '+375295551234',
-        login: 'AliceSmith',
-        password: 'Password123!',
-      };
       const secondNewUserDto: CreateUserDto = {
         firstName: 'Bob',
         lastName: 'Johnson',
@@ -165,7 +164,7 @@ describe('UserController (e2e)', () => {
       };
       const firstResponse = await request(app.getHttpServer())
         .post('/user')
-        .send(firstNewUserDto);
+        .send(createUserDto);
       createdUsers.push(firstResponse.body);
       const secondResponse = await request(app.getHttpServer())
         .post('/user')
@@ -198,16 +197,9 @@ describe('UserController (e2e)', () => {
       phoneNumber: '+375295555678',
     };
     beforeAll(async () => {
-      const newUserDto: CreateUserDto = {
-        firstName: 'Alice',
-        lastName: 'Smith',
-        phoneNumber: '+375295551234',
-        login: 'AliceSmith',
-        password: 'Password123!',
-      };
       const response = await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto);
+        .send(createUserDto);
       createdUser = response.body;
     });
     it('successfully update all user data by id', async () => {
@@ -304,16 +296,9 @@ describe('UserController (e2e)', () => {
     let createdUser: User;
     const countOfAffectedRows = 1;
     beforeAll(async () => {
-      const newUserDto: CreateUserDto = {
-        firstName: 'Alice',
-        lastName: 'Smith',
-        phoneNumber: '+375295551234',
-        login: 'AliceSmith',
-        password: 'Password123!',
-      };
       const response = await request(app.getHttpServer())
         .post('/user')
-        .send(newUserDto);
+        .send(createUserDto);
       createdUser = response.body;
     });
     it('successfully delete by id', async () => {
@@ -338,7 +323,6 @@ describe('UserController (e2e)', () => {
   });
 
   afterAll(async () => {
-    await userRepository.clear();
     await app.close();
   });
 });

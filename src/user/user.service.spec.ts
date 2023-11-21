@@ -2,8 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { Repository } from 'typeorm';
+import { FindOneOptions, Repository } from 'typeorm';
 import { User } from './entities/user.entity';
+import { ConfigService } from '@nestjs/config';
 import * as uuid from 'uuid';
 
 const maxCountOfAffectedRows = 100;
@@ -11,6 +12,7 @@ const countOfAffectedRows: number = Math.floor(
   Math.random() * maxCountOfAffectedRows,
 );
 const userID: string = uuid.v4();
+const saltRounds = 10;
 
 const mockedUserRepository = {
   create: jest.fn((createUserDto: CreateUserDto) => {
@@ -29,12 +31,18 @@ const mockedUserRepository = {
   update: jest.fn(() => {
     return { affected: countOfAffectedRows };
   }),
-  findOne: jest.fn(({ where: { id: id } }) => {
-    return id;
+  findOne: jest.fn((options: FindOneOptions<User>) => {
+    return options.where;
   }),
   find: jest.fn(() => {}),
   delete: jest.fn(() => {
     return { affected: countOfAffectedRows };
+  }),
+};
+
+const mockedConfigService = {
+  get: jest.fn(() => {
+    return saltRounds;
   }),
 };
 
@@ -50,6 +58,7 @@ describe('UserService', () => {
           provide: 'USER_REPOSITORY',
           useValue: mockedUserRepository,
         },
+        { provide: ConfigService, useValue: mockedConfigService },
       ],
     }).compile();
 
@@ -58,12 +67,13 @@ describe('UserService', () => {
   });
 
   describe('create (create user)', () => {
+    const passwordBeforeHash = 'Password123';
     const newUser: CreateUserDto = {
       firstName: 'Alice',
       lastName: 'Smith',
       phoneNumber: '+375295551234',
       login: 'AliceSmith',
-      password: 'Password123',
+      password: passwordBeforeHash,
     };
     it('should successfully call repository method', async () => {
       const spyOnCreate = jest.spyOn(userRepository, 'create');
@@ -72,6 +82,7 @@ describe('UserService', () => {
         id: userID,
         ...newUser,
       });
+      expect(passwordBeforeHash).not.toEqual(newUser.password);
       expect(spyOnCreate).toHaveBeenCalledWith(newUser);
       expect(spyOnSave).toHaveBeenCalledWith({ id: userID, ...newUser });
     });
@@ -95,7 +106,7 @@ describe('UserService', () => {
   describe('findByID (get user by id)', () => {
     it('should successfully call repository method', async () => {
       const spy = jest.spyOn(userRepository, 'findOne');
-      expect(await userService.findByID(userID)).toBe(userID);
+      expect(await userService.findByID(userID)).toStrictEqual({ id: userID });
       expect(spy).toHaveBeenCalledWith({ where: { id: userID } });
     });
   });
@@ -113,6 +124,15 @@ describe('UserService', () => {
       const spy = jest.spyOn(userRepository, 'delete');
       expect(await userService.remove(userID)).toBe(countOfAffectedRows);
       expect(spy).toHaveBeenCalledWith(userID);
+    });
+  });
+
+  describe('findByLogin (get user by login)', () => {
+    it('should successfully call repository method', async () => {
+      const login = 'userLogin';
+      const spy = jest.spyOn(userRepository, 'findOne');
+      expect(await userService.findByLogin(login)).toStrictEqual({ login });
+      expect(spy).toHaveBeenCalledWith({ where: { login } });
     });
   });
 });

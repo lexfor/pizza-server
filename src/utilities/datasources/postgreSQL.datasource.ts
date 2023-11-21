@@ -7,7 +7,7 @@ ConfigModule.forRoot();
 const configService = new ConfigService();
 export const dataSource = new DataSource({
   type: 'postgres',
-  host: configService.get('DB_HOST'), // TODO: Add .env validation
+  host: configService.get('DB_HOST'),
   port: configService.get<number>('DB_PORT'),
   username: configService.get('DB_USERNAME'),
   password: configService.get('DB_PASSWORD'),

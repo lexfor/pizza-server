@@ -65,7 +65,6 @@ export class UserController {
   })
   @UserNotFoundResponseParam()
   async findOne(@UserID(new ParseUUIDPipe()) id: UUID) {
-    await this.throwNotFoundExceptionIfUserNotExist(id);
     return this.userService.findByID(id);
   }
 
@@ -80,7 +79,6 @@ export class UserController {
     @UserID(new ParseUUIDPipe()) id: UUID,
     @Body() updateUserDto: UpdateUserDto,
   ) {
-    await this.throwNotFoundExceptionIfUserNotExist(id);
     return this.userService.update(id, updateUserDto);
   }
 
@@ -92,21 +90,6 @@ export class UserController {
   })
   @UserNotFoundResponseParam()
   async remove(@UserID(new ParseUUIDPipe()) id: UUID) {
-    await this.throwNotFoundExceptionIfUserNotExist(id);
     return this.userService.remove(id);
-  }
-
-  async isUserNotExist(userID: UUID) {
-    const user: User = await this.userService.findByID(userID);
-    return !user;
-  }
-
-  async throwNotFoundExceptionIfUserNotExist(userID: UUID) {
-    if (await this.isUserNotExist(userID)) {
-      throw new HttpException(
-        'User with that id is not exist',
-        HttpStatus.NOT_FOUND,
-      );
-    }
   }
 }

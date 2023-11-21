@@ -1,5 +1,7 @@
 import { plainToClass } from 'class-transformer';
-import { IsNumber, IsString, validateSync } from 'class-validator';
+import { IsNumber, IsString, MinLength, validateSync } from 'class-validator';
+
+const countOfMinimalCharacters = 10;
 
 class EnvironmentVariables {
   @IsNumber()
@@ -19,6 +21,13 @@ class EnvironmentVariables {
 
   @IsString()
   DB_PASSWORD: string;
+
+  @IsNumber()
+  SALT_ROUNDS: number;
+
+  @IsString()
+  @MinLength(countOfMinimalCharacters)
+  JWT_SECRET: string;
 }
 
 export function validate(configuration: Record<string, unknown>) {

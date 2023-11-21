@@ -1,10 +1,10 @@
-import { Inject, Injectable, NestMiddleware } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 
 @Injectable()
-export class IsUserWithSameLoginAlreadyExistMiddleware
+export class CheckIsUserAlreadyExistByLoginMiddleware
   implements NestMiddleware
 {
   constructor(
@@ -13,14 +13,15 @@ export class IsUserWithSameLoginAlreadyExistMiddleware
   ) {}
   async use(req: Request, res: Response, next: NextFunction) {
     if (await this.isUserWithSameLoginAlreadyExist(req.body.login || '')) {
-      res.status(400).json('User with the same login already exist');
+      res
+        .status(HttpStatus.BAD_REQUEST)
+        .json('User with the same login already exist');
     } else {
       next();
     }
   }
 
   async isUserWithSameLoginAlreadyExist(login: string): Promise<boolean> {
-    const users = await this.userRepository.find({ where: { login } });
-    return users.length > 0;
+    return !!(await this.userRepository.findOne({ where: { login } }));
   }
 }

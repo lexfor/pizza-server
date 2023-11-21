@@ -1,12 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpStatus, INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
 import { UserModule } from '../src/user/user.module';
 import { CreateUserDto } from '../src/user/dto/create-user.dto';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import { User } from '../src/user/entities/user.entity';
-import * as uuid from 'uuid';
 import { UpdateUserDto } from '../src/user/dto/update-user.dto';
+import { validate } from '../src/utilities/config/env.validation';
+import { ConfigModule } from '@nestjs/config';
+import * as uuid from 'uuid';
+import * as request from 'supertest';
 
 describe('UserController (e2e)', () => {
   let app: INestApplication;
@@ -19,49 +21,57 @@ describe('UserController (e2e)', () => {
     password: 'Password123!',
   };
 
-  function deleteUsersByID(userIDs: string[]) {
-    userIDs.map(async () => {
-      await userRepository.delete(userIDs);
-    });
+  async function deleteUsersByID(userIDs: string[]) {
+    await Promise.all(
+      userIDs.map(async (id) => {
+        await deleteUserIfExist({ id });
+      }),
+    );
   }
 
-  async function deleteUserIfExist(login: string) {
-    const users = await userRepository.find({ where: { login } });
-    if (users.length === 0) {
-      await userRepository.delete({ login });
+  async function deleteUserIfExist(where: FindOptionsWhere<User>) {
+    const user = await userRepository.findOne({ where });
+    if (user) {
+      await userRepository.delete(where);
     }
   }
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [UserModule],
+      imports: [UserModule, ConfigModule.forRoot({ validate, isGlobal: true })],
     }).compile();
 
     app = moduleFixture.createNestApplication();
     userRepository = moduleFixture.get<Repository<User>>('USER_REPOSITORY');
     await app.init();
 
-    await deleteUserIfExist(createUserDto.login);
+    await userRepository.clear(); // TODO: add docker instance for e2e tests
   });
 
   describe('POST /user (create new user)', () => {
+    const { password: passwordBeforeHash, ...createUserDtoWithoutPassword } =
+      createUserDto;
     it('successfully create new user', async () => {
       const response = await request(app.getHttpServer())
         .post('/user')
         .send(createUserDto)
         .expect(HttpStatus.CREATED);
-      expect(response.body).toMatchObject(createUserDto);
-      deleteUsersByID([response.body.id]);
+      expect(response.body).toMatchObject(createUserDtoWithoutPassword);
+      expect(response.body.password).not.toBe(passwordBeforeHash);
+      await deleteUsersByID([response.body.id]);
     });
     it('successfully create new user with phone number without country code', async () => {
-      const wrongCreateUserDto: CreateUserDto = { ...createUserDto };
-      wrongCreateUserDto.phoneNumber = '295551234';
+      const newUserDto: CreateUserDto = { ...createUserDto };
+      newUserDto.phoneNumber = '295551234';
+      const { password: passwordBeforeHash, ...newUserDtoWithoutPassword } =
+        newUserDto;
       const response = await request(app.getHttpServer())
         .post('/user')
-        .send(wrongCreateUserDto)
+        .send(newUserDto)
         .expect(HttpStatus.CREATED);
-      expect(response.body).toMatchObject(wrongCreateUserDto);
-      deleteUsersByID([response.body.id]);
+      expect(response.body).toMatchObject(newUserDtoWithoutPassword);
+      expect(response.body.password).not.toBe(passwordBeforeHash);
+      await deleteUsersByID([response.body.id]);
     });
     it('failed create new user with too small phone number', async () => {
       const wrongCreateUserDto: CreateUserDto = { ...createUserDto };
@@ -119,7 +129,7 @@ describe('UserController (e2e)', () => {
         .post('/user')
         .send(createUserDto)
         .expect(HttpStatus.BAD_REQUEST);
-      deleteUsersByID([response.body.id]);
+      await deleteUsersByID([response.body.id]);
     });
   });
 
@@ -148,7 +158,7 @@ describe('UserController (e2e)', () => {
         .expect(HttpStatus.NOT_FOUND);
     });
     afterAll(async () => {
-      deleteUsersByID([createdUser.id]);
+      await deleteUsersByID([createdUser.id]);
     });
   });
 
@@ -166,6 +176,7 @@ describe('UserController (e2e)', () => {
         .post('/user')
         .send(createUserDto);
       createdUsers.push(firstResponse.body);
+      await deleteUserIfExist({ login: secondNewUserDto.login });
       const secondResponse = await request(app.getHttpServer())
         .post('/user')
         .send(secondNewUserDto);
@@ -175,16 +186,18 @@ describe('UserController (e2e)', () => {
       const response = await request(app.getHttpServer())
         .get('/user')
         .expect(HttpStatus.OK);
-      expect(response.body).toStrictEqual(createdUsers);
+      createdUsers.forEach((createdUser) => {
+        expect(response.body).toContainEqual(createdUser);
+      });
     });
     it('failed to get empty users', async () => {
-      deleteUsersByID(createdUsers.map((user) => user.id));
+      await deleteUsersByID(createdUsers.map((user) => user.id));
       await request(app.getHttpServer())
         .get('/user')
         .expect(HttpStatus.NOT_FOUND);
     });
     afterAll(async () => {
-      deleteUsersByID(createdUsers.map((user) => user.id));
+      await deleteUsersByID(createdUsers.map((user) => user.id));
     });
   });
 
@@ -288,7 +301,7 @@ describe('UserController (e2e)', () => {
         .expect(HttpStatus.BAD_REQUEST);
     });
     afterAll(async () => {
-      deleteUsersByID([createdUser.id]);
+      await deleteUsersByID([createdUser.id]);
     });
   });
 
@@ -318,7 +331,7 @@ describe('UserController (e2e)', () => {
         .expect(HttpStatus.NOT_FOUND);
     });
     afterAll(async () => {
-      deleteUsersByID([createdUser.id]);
+      await deleteUsersByID([createdUser.id]);
     });
   });
 

@@ -1,3 +1,4 @@
 export interface IJwtToken {
-  access_token: string; //TODO: Add expire in
+  access_token: string;
+  refresh_token: string;
 }

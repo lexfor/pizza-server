@@ -6,9 +6,12 @@ import {
   ValidationPipe,
   HttpCode,
   HttpStatus,
+  Get,
+  UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
+  ApiBearerAuth,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
@@ -18,6 +21,8 @@ import { User } from '../user/entities/user.entity';
 import { CreateUserDto } from '../user/dto/create-user.dto';
 import { UserService } from '../user/user.service';
 import { SignInDto } from './dto/sign-in.dto';
+import { JwtRefreshGuard } from '../utilities/guards/jwt-refresh.guard';
+import { UserIDFromRequest } from '../utilities/decorators/user-id.request.decorator';
 
 @Controller('auth')
 @ApiTags('auth')
@@ -41,5 +46,14 @@ export class AuthController {
   @ApiOkResponse({ description: 'access token' })
   signIn(@Body() signInDto: SignInDto) {
     return this.authService.login(signInDto);
+  }
+
+  @Get('/refresh')
+  @UseGuards(JwtRefreshGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Refresh user access token' })
+  @ApiOkResponse({ description: 'access token and refresh token' })
+  refresh(@UserIDFromRequest() userID: string) {
+    return this.authService.createTokensByUserID(userID);
   }
 }

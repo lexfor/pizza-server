@@ -20,7 +20,10 @@ const createUserDto: CreateUserDto = {
   phoneNumber: '+375295551234',
   ...signInDto,
 };
-const jwtToken: IJwtToken = { access_token: { userID }.toString() };
+const jwtToken: IJwtToken = {
+  access_token: { userID }.toString(),
+  refresh_token: { userID }.toString(),
+};
 let user = new User();
 user = {
   id: userID,
@@ -33,6 +36,9 @@ const mockedUserService = {
 };
 const mockedAuthService = {
   login: jest.fn((): IJwtToken => {
+    return jwtToken;
+  }),
+  createTokensByUserID: jest.fn((): IJwtToken => {
     return jwtToken;
   }),
 };
@@ -75,6 +81,14 @@ describe('AuthController', () => {
       const spy = jest.spyOn(authService, 'login');
       expect(await authController.signIn(signInDto)).toBe(jwtToken);
       expect(spy).toHaveBeenCalledWith(signInDto);
+    });
+  });
+
+  describe('refresh (get new access and refresh tokens by refresh token)', () => {
+    it('should successfully call service method', async () => {
+      const spy = jest.spyOn(authService, 'createTokensByUserID');
+      expect(authController.refresh(userID)).toBe(jwtToken);
+      expect(spy).toHaveBeenCalledWith(userID);
     });
   });
 });

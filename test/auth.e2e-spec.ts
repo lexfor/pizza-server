@@ -8,6 +8,7 @@ import { ConfigModule } from '@nestjs/config';
 import { validate } from '../src/utilities/config/env.validation';
 import * as request from 'supertest';
 import { SignInDto } from '../src/auth/dto/sign-in.dto';
+import { IJwtToken } from '../src/auth/interfaces/jwt-token.interface';
 
 describe('AuthController (e2e)', () => {
   let app: INestApplication;
@@ -165,6 +166,55 @@ describe('AuthController (e2e)', () => {
       await request(app.getHttpServer())
         .post('/auth/sign-in')
         .send(wrongSignInDto)
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+    afterAll(async () => {
+      await deleteUsersByID([createdUser.id]);
+    });
+  });
+
+  describe('GET /auth/refresh (get new access and refresh tokens by refresh)', () => {
+    let createdUser: User;
+    let tokens: IJwtToken;
+    beforeAll(async () => {
+      const createUserResponse = await request(app.getHttpServer())
+        .post('/auth/sign-up')
+        .send(createUserDto);
+      createdUser = createUserResponse.body;
+      const loginResponse = await request(app.getHttpServer())
+        .post('/auth/sign-in')
+        .send(signInDto);
+      tokens = loginResponse.body;
+    });
+    it('successfully get new access and refresh tokens', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/auth/refresh')
+        .set('Authorization', `Bearer ${tokens.refresh_token}`)
+        .expect(HttpStatus.OK);
+      expect(response.body.access_token).not.toEqual(tokens.access_token);
+      expect(response.body.refresh_token).not.toEqual(tokens.refresh_token);
+    });
+    it('failed to get new tokens by access token', async () => {
+      await request(app.getHttpServer())
+        .get('/auth/refresh')
+        .set('Authorization', `Bearer ${tokens.access_token}`)
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+    it('failed to get new tokens by wrong token', async () => {
+      await request(app.getHttpServer())
+        .get('/auth/refresh')
+        .set('Authorization', 'Bearer wrongToken')
+        .expect(HttpStatus.UNAUTHORIZED);
+    });
+    //Use test.env file for correct result of next test TODO: Add docker env for tests
+    it('failed to get new tokens by expired token', async () => {
+      const refreshTokenExpiredTimeInMilliseconds = 1000;
+      await new Promise((resolve) =>
+        setTimeout(resolve, refreshTokenExpiredTimeInMilliseconds),
+      );
+      await request(app.getHttpServer())
+        .get('/auth/refresh')
+        .set('Authorization', `Bearer ${tokens.refresh_token}`)
         .expect(HttpStatus.UNAUTHORIZED);
     });
     afterAll(async () => {
